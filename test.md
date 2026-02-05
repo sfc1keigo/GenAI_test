@@ -1,64 +1,91 @@
-# DB設計書
+# DB設計書 (アドオン：個人経費管理機能)
 
-- [データベース情報](#データベース情報)
-- [テーブル定義](#テーブル定義)
-  - [ユーザー情報テーブル](#ユーザー情報テーブル)
-  - [家計簿情報テーブル](#家計簿情報テーブル)
-- [ER 図](#er-図)
+- [オブジェクト概要](#オブジェクト概要)
+- [テーブル定義一覧](#テーブル定義一覧)
+  - [ZTM_PEM_USER（経費利用者マスタ）](#ztm_pem_user経費利用者マスタ)
+  - [ZTT_PEM_TRANS（経費明細トランザクション）](#ztt_pem_trans経費明細トランザクション)
+- [ER図](#er図)
 
-# データベース情報
+---
 
-- **DB 論理名**: 家計簿データベース
-- **DB 物理名**: kakeibo_db
-- **ホスト名** : kakeibo_db_host
-- **RDBMS の種類とバージョン**: PostgreSQL 13
+# オブジェクト概要
 
-# テーブル定義
+本ドキュメントは、SAPアドオン開発における「個人経費管理（Personal Expense Management）」機能のデータベース設計書である。
+命名規則として、マスタテーブルは `ZTM_`、トランザクションテーブルは `ZTT_` のプレフィックスを付与し、機能コードとして `PEM` を使用する。
 
-## ユーザー情報テーブル
+- **開発パッケージ**: `ZPEM_FIN`
+- **移送レイヤ**: `SAP`
+- **データクラス**: `APPL0` (マスタ) / `APPL1` (トランザクション)
+- **サイズカテゴリ**: `0`
 
-- **論理名**: ユーザー情報
-- **物理名**: users
+---
 
-| カラム物理名 | カラム論理名   | データ型  | 凡例                        | FK  | PK  | ユニーク制約 |
-| ------------ | -------------- | --------- | --------------------------- | --- | --- | ------------ |
-| user_id      | ユーザー ID    | SERIAL    | 1                           |     | ○   | ○            |
-| username     | ユーザー名     | VARCHAR   | 情報太郎                    |     |     | ○            |
-| email        | メールアドレス | VARCHAR   | info_taro@example.dummy |     |     | ○            |
-| created_at   | 作成日時       | TIMESTAMP | 2023-01-01 00:00:00         |     |     |              |
+# テーブル定義一覧
 
-## 家計簿情報テーブル
+## ZTM_PEM_USER（経費利用者マスタ）
 
-- **論理名**: 家計簿情報
-- **物理名**: kakeibo
+経費精算および管理を行う利用者を定義するマスタテーブル。
 
-| カラム物理名 | カラム論理名 | データ型  | 凡例                | FK  | PK  | ユニーク制約 |
-| ------------ | ------------ | --------- | ------------------- | --- | --- | ------------ |
-| record_id    | 記録 ID      | SERIAL    | 1001                |     | ○   | ○            |
-| user_id      | ユーザー ID  | INTEGER   | 1                   | ○   |     |              |
-| date         | 日付         | DATE      | 2023-10-01          |     |     |              |
-| type         | 収入・支出   | VARCHAR   | income              |     |     |              |
-| category     | カテゴリ     | VARCHAR   | salary              |     |     |              |
-| amount       | 金額         | INTEGER   | 1000                |     |     |              |
+- **技術名称**: `ZTM_PEM_USER`
+- **バッファリング**: 未許可
+- **データクラス**: `APPL0`
 
-# ER 図
+| 項目名 | 項目論理名 | データ要素 | 型 | 長さ | PK | 初期値 | 備考 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **MANDT** | クライアント | `MANDT` | CLNT | 3 | ○ | ○ | SAP標準項目 |
+| **ZUSER_ID** | 利用者ID | `ZDE_PEM_USER_ID` | CHAR | 10 | ○ | | 従業員番号等 |
+| **ZUSERNAME** | 利用者名称 | `AD_NAMTEXT` | CHAR | 40 | | | |
+| **ZEMAIL** | 連絡先アドレス | `AD_SMTPADR` | CHAR | 241 | | | |
+| **ERDAT** | 作成日 | `ERDAT` | DATS | 8 | | | システム日付 |
+| **ERNAM** | 作成者 | `ERNAM` | CHAR | 12 | | | 登録ユーザー名 |
+
+## ZTT_PEM_TRANS（経費明細トランザクション）
+
+発生した経費明細を記録するトランザクションテーブル。
+
+- **技術名称**: `ZTT_PEM_TRANS`
+- **バッファリング**: 未許可
+- **データクラス**: `APPL1`
+
+| 項目名 | 項目論理名 | データ要素 | 型 | 長さ | PK | 初期値 | 備考 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **MANDT** | クライアント | `MANDT` | CLNT | 3 | ○ | ○ | SAP標準項目 |
+| **ZPEM_UUID** | 経費伝票UUID | `SYSUUID_C32` | CHAR | 32 | ○ | | ユニークキー |
+| **ZUSER_ID** | 利用者ID | `ZDE_PEM_USER_ID` | CHAR | 10 | | | ZTM_PEM_USER結合 |
+| **ZBUDAT** | 転記日付 | `BUDAT` | DATS | 8 | | | |
+| **ZEXP_TYPE** | 経費区分 | `ZDE_PEM_ETYPE` | CHAR | 1 | | | 1:入金, 2:出金 |
+| **ZCATG** | 経費カテゴリ | `ZDE_PEM_CATG` | CHAR | 10 | | | 旅費、消耗品等 |
+| **DMBTR** | 国内通貨金額 | `DMBTR` | CURR | 13 | | | 参照: ZTT_PEM_TRANS-WAERS |
+| **WAERS** | 通貨コード | `WAERS` | CUKY | 5 | | | T005参照 |
+| **ERDAT** | 作成日 | `ERDAT` | DATS | 8 | | | |
+
+---
+
+# ER図
+
+SAPのテーブル構造に基づき、クライアントキー（MANDT）を含めたエンティティ定義とする。
+
+
 
 ```mermaid
 erDiagram
-    USERS {
-        SERIAL user_id PK
-        VARCHAR username
-        VARCHAR email
-        TIMESTAMP created_at
+    ZTM_PEM_USER {
+        CLNT MANDT PK
+        CHAR ZUSER_ID PK
+        CHAR ZUSERNAME
+        CHAR ZEMAIL
+        DATS ERDAT
+        CHAR ERNAM
     }
-    KAKEIBO {
-        SERIAL record_id PK
-        INTEGER user_id FK
-        DATE date
-        VARCHAR type
-        VARCHAR category
-        INTEGER amount
+    ZTT_PEM_TRANS {
+        CLNT MANDT PK
+        CHAR ZPEM_UUID PK
+        CHAR ZUSER_ID FK
+        DATS ZBUDAT
+        CHAR ZEXP_TYPE
+        CHAR ZCATG
+        CURR DMBTR
+        CUKY WAERS
+        DATS ERDAT
     }
-    USERS ||--o{ KAKEIBO : "has"
-```
-
+    ZTM_PEM_USER ||--o{ ZTT_PEM_TRANS : "Foreign Key (ZUSER_ID)"
